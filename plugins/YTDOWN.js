@@ -20,7 +20,17 @@ async (conn, mek, m, { from, args, reply, sender }) => {
         await reply('⏳ Video info ගන්නවා...');
 
         const api = `https://www.movanest.xyz/v2/yt-vidsave?url=${encodeURIComponent(url)}`;
-        const { data } = await axios.get(api, { timeout: 30000 });
+
+        const { data } = await axios.get(api, {
+            timeout: 30000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://www.movanest.xyz/',
+                'Origin': 'https://www.movanest.xyz'
+            }
+        });
 
         if (!data.status || !data.results) return reply('❌ Video හොයාගන්න බැරි වුණා. URL check කරන්න.');
 
@@ -29,6 +39,8 @@ async (conn, mek, m, { from, args, reply, sender }) => {
         const videos = (formats || []).filter(f => f.type === 'video');
         const audios = (formats || []).filter(f => f.type === 'audio');
         const allFormats = [...videos, ...audios];
+
+        if (allFormats.length === 0) return reply('❌ Download formats හොයාගන්න බැරි වුණා.');
 
         pending[sender] = { formats: allFormats, title, thumbnail };
 
@@ -76,7 +88,8 @@ Example: *1*
 
     } catch (e) {
         console.log('ytlink error:', e.message);
-        reply(`❌ Error: ${e.message}`);
+        const errMsg = e.response?.data?.message || e.response?.data?.error || e.message;
+        reply(`❌ Error: ${errMsg}`);
     }
 });
 
