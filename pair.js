@@ -186,7 +186,8 @@ async function Pair(number, res = null) {
             connectTimeoutMs: 60000,
             defaultQueryTimeoutMs: 30000,
             keepAliveIntervalMs: 30000,
-            msgRetryCounterCache
+            msgRetryCounterCache,
+            markOnlineOnConnect: false
         });
 
         activeSockets[sessionId] = sock;
@@ -284,7 +285,7 @@ async function Pair(number, res = null) {
                         delete keepAliveTimers[sessionId];
                         return;
                     }
-                    sock.sendPresenceUpdate('available', sock.user.id).catch(() => {
+                    sock.sendPresenceUpdate('unavailable', sock.user.id).catch(() => {
                         console.log('Keep-alive failed:', sessionId);
                         cleanupSession(sessionId);
                         reconnectTimers[sessionId] = setTimeout(() => Pair(number), 3000);
