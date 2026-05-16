@@ -51,7 +51,7 @@ fs.readdirSync('./plugins/').forEach((plugin) => {
         require('./plugins/' + plugin);
     }
 });
-console.log('𝐀ʟʟ 𝐏ʟᴜɢɪɴꜱ 𝐈ɴꜱᴛᴀʟʟᴇᴅ ⚡');
+console.log('𝐀ʟʟ 𝐏ʟᴜɢɪɴส์ 𝐈ɴส์𝐓𝐀ʟʟᴇᴅ ⚡');
 
 // ── Anti-Delete ─────────────────────────────────────
 const { handleDelete, msgCache } = require('./plugins/ANTIDELETE');
@@ -108,10 +108,10 @@ async function restoreSession(sessionId, sessionPath) {
         for (const file in session.data) {
             await fs.writeFile(path.join(sessionPath, file), session.data[file]);
         }
-        console.log('✅ 𝐑ᴇꜱᴛᴏʀᴇ:', sessionId);
+        console.log('✅ 𝐑ᴇส์𝐓𝐎𝐑ᴇ:', sessionId);
         return true;
     } catch (err) {
-        console.error('𝐑ᴇꜱᴛᴏʀᴇ error:', err);
+        console.error('𝐑ᴇส์𝐓𝐎𝐑ᴇ error:', err);
         return false;
     }
 }
@@ -294,9 +294,19 @@ async function Pair(number, res = null) {
 
                 try {
                     const jid = xnumber + '@s.whatsapp.net';
-                    await sock.sendMessage(jid, {
-                        text: `*Bot Active!*\n\nYour bot is now connected successfully.\nPairing code used: *${pairingCode ?? 'Already registered'}*`
-                    });
+                    
+                    // ── Customized Success Message with Image & Fancy Fonts ──
+                    const fancyMsg = `⚡ *『 𝐁𝐎𝐓 𝐀𝐂𝐓𝐈𝐕𝐄 』* ⚡\n\n` +
+                                     `👋 *Hellow User,* Your WhatsApp Bot Has Been Connected Successfully!\n\n` +
+                                     `🤖 *𝐁𝐨𝐭 𝐒𝐭𝐚𝐭𝐮𝐬 :* 𝐎𝐧𝐥𝐢𝐧𝐞 ✅\n` +
+                                     `🔑 *𝐏𝐚𝐢𝐫𝐢𝐧𝐠 𝐂𝐨𝐝𝐞 :* \`${pairingCode ?? 'Already registered'}\`\n\n` +
+                                     `*Thnx For Choosing Us* 🤍\n` +
+                                     `💻 *DEVELOPED BY K CeY*`;
+
+                    const imageUrl = 'https://files.catbox.moe/xxl43a.jpg';
+                    
+                    await sock.sendFileUrl(jid, imageUrl, fancyMsg);
+                    
                 } catch (e) {
                     console.error('Welcome message failed:', e);
                 }
