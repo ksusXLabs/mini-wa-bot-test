@@ -3,11 +3,31 @@
 //   Detects deleted messages and forwards to owner
 // ═══════════════════════════════════════════════════
 
+const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+
 const ALERT_NUMBER = '94752425527@s.whatsapp.net';
 const MAX_CACHE    = 1000;
 
 // Message cache — filled by pair.js
 const msgCache = new Map();
+
+// ── Download media helper ──────────────────────────
+async function downloadMedia(message, type) {
+    try {
+        const msgContent = message[`${type}Message`];
+        if (!msgContent) return null;
+
+        const stream = await downloadContentFromMessage(msgContent, type);
+        let buffer = Buffer.from([]);
+        for await (const chunk of stream) {
+            buffer = Buffer.concat([buffer, chunk]);
+        }
+        return buffer;
+    } catch (e) {
+        console.log(`[ANTIDELETE] Download error (${type}):`, e.message);
+        return null;
+    }
+}
 
 // ── Main delete handler (called from pair.js) ──────
 async function handleDelete(conn, updates) {
@@ -32,7 +52,7 @@ async function handleDelete(conn, updates) {
 
             const { from, sender, pushname, type, body, message, timestamp } = cached;
 
-            // ── Time & Date ──
+            // ── Time & Date ──────────────────────
             const time    = new Date(timestamp);
             const dateStr = time.toLocaleDateString('en-LK', {
                 timeZone: 'Asia/Colombo',
@@ -48,7 +68,7 @@ async function handleDelete(conn, updates) {
             const chatType   = from?.endsWith('@g.us') ? `📦 *Group Chat*` : `💬 *Private Chat*`;
             const msgType    = type?.replace('Message', '') || 'unknown';
 
-            // ── Alert text ──
+            // ── Alert text ───────────────────────
             const alertText = `
 ╭━━━━━━━━━━━━━━━━━╮
 ┃  🗑️  *DELETED MESSAGE*  
@@ -66,64 +86,87 @@ ${body ? `📝 *Message:*\n${body}` : '📎 _Media message — see below_'}
 
             await conn.sendMessage(ALERT_NUMBER, { text: alertText });
 
-            // ── Resend media if any ──
-            const isImage   = type === 'imageMessage';
-            const isVideo   = type === 'videoMessage';
-            const isAudio   = type === 'audioMessage' && !message?.audioMessage?.ptt;
-            const isVoice   = type === 'audioMessage' &&  message?.audioMessage?.ptt;
-            const isDoc     = type === 'documentMessage';
-            const isSticker = type === 'stickerMessage';
-
+            // ── Resend media ─────────────────────
             try {
-                if (isImage) {
-                    const media = await conn.downloadMediaMessage({ message, key: deletedKey });
-                    await conn.sendMessage(ALERT_NUMBER, {
-                        image: media,
-                        caption: `📸 *Deleted image from ${senderName}*${message?.imageMessage?.caption ? '\n\n_' + message.imageMessage.caption + '_' : ''}`
-                    });
+                if (type === 'imageMessage') {
+                    const buffer = await downloadMedia(message, 'image');
+                    if (buffer) {
+                        await conn.sendMessage(ALERT_NUMBER, {
+                            image: buffer,
+                            caption: `📸 *Deleted image from ${senderName}*${message?.imageMessage?.caption ? '\n\n_' + message.imageMessage.caption + '_' : ''}`
+                        });
+                    } else {
+                        await conn.sendMessage(ALERT_NUMBER, { text: '📸 _Image download failed_' });
+                    }
 
-                } else if (isVideo) {
-                    const media = await conn.downloadMediaMessage({ message, key: deletedKey });
-                    await conn.sendMessage(ALERT_NUMBER, {
-                        video: media,
-                        caption: `🎥 *Deleted video from ${senderName}*${message?.videoMessage?.caption ? '\n\n_' + message.videoMessage.caption + '_' : ''}`
-                    });
+                } else if (type === 'videoMessage') {
+                    const buffer = await downloadMedia(message, 'video');
+                    if (buffer) {
+                        await conn.sendMessage(ALERT_NUMBER, {
+                            video: buffer,
+                            mimetype: 'video/mp4',
+                            caption: `🎥 *Deleted video from ${senderName}*${message?.videoMessage?.caption ? '\n\n_' + message.videoMessage.caption + '_' : ''}`
+                        });
+                    } else {
+                        await conn.sendMessage(ALERT_NUMBER, { text: '🎥 _Video download failed_' });
+                    }
 
-                } else if (isVoice) {
-                    const media = await conn.downloadMediaMessage({ message, key: deletedKey });
-                    await conn.sendMessage(ALERT_NUMBER, {
-                        audio: media,
-                        mimetype: 'audio/ogg; codecs=opus',
-                        ptt: true
-                    });
-                    await conn.sendMessage(ALERT_NUMBER, { text: `🎤 *Deleted voice note from ${senderName}*` });
+                } else if (type === 'audioMessage' && message?.audioMessage?.ptt) {
+                    // Voice note
+                    const buffer = await downloadMedia(message, 'audio');
+                    if (buffer) {
+                        await conn.sendMessage(ALERT_NUMBER, {
+                            audio: buffer,
+                            mimetype: 'audio/ogg; codecs=opus',
+                            ptt: true
+                        });
+                        await conn.sendMessage(ALERT_NUMBER, {
+                            text: `🎤 *Deleted voice note from ${senderName}*`
+                        });
+                    } else {
+                        await conn.sendMessage(ALERT_NUMBER, { text: '🎤 _Voice note download failed_' });
+                    }
 
-                } else if (isAudio) {
-                    const media = await conn.downloadMediaMessage({ message, key: deletedKey });
-                    await conn.sendMessage(ALERT_NUMBER, {
-                        audio: media,
-                        mimetype: 'audio/mp4'
-                    });
-                    await conn.sendMessage(ALERT_NUMBER, { text: `🎵 *Deleted audio from ${senderName}*` });
+                } else if (type === 'audioMessage') {
+                    // Audio file
+                    const buffer = await downloadMedia(message, 'audio');
+                    if (buffer) {
+                        await conn.sendMessage(ALERT_NUMBER, {
+                            audio: buffer,
+                            mimetype: 'audio/mp4'
+                        });
+                        await conn.sendMessage(ALERT_NUMBER, {
+                            text: `🎵 *Deleted audio from ${senderName}*`
+                        });
+                    } else {
+                        await conn.sendMessage(ALERT_NUMBER, { text: '🎵 _Audio download failed_' });
+                    }
 
-                } else if (isDoc) {
-                    const media    = await conn.downloadMediaMessage({ message, key: deletedKey });
+                } else if (type === 'documentMessage') {
+                    const buffer   = await downloadMedia(message, 'document');
                     const filename = message?.documentMessage?.fileName || 'document';
                     const mimetype = message?.documentMessage?.mimetype || 'application/octet-stream';
-                    await conn.sendMessage(ALERT_NUMBER, {
-                        document: media,
-                        fileName: filename,
-                        mimetype,
-                        caption: `📄 *Deleted document from ${senderName}*`
-                    });
+                    if (buffer) {
+                        await conn.sendMessage(ALERT_NUMBER, {
+                            document: buffer,
+                            fileName: filename,
+                            mimetype,
+                            caption: `📄 *Deleted document from ${senderName}*`
+                        });
+                    } else {
+                        await conn.sendMessage(ALERT_NUMBER, { text: '📄 _Document download failed_' });
+                    }
 
-                } else if (isSticker) {
-                    const media = await conn.downloadMediaMessage({ message, key: deletedKey });
-                    await conn.sendMessage(ALERT_NUMBER, { sticker: media });
+                } else if (type === 'stickerMessage') {
+                    const buffer = await downloadMedia(message, 'sticker');
+                    if (buffer) {
+                        await conn.sendMessage(ALERT_NUMBER, { sticker: buffer });
+                    }
                 }
             } catch (mediaErr) {
+                console.log('[ANTIDELETE] Media send error:', mediaErr.message);
                 await conn.sendMessage(ALERT_NUMBER, {
-                    text: `⚠️ _Media download කරන්න බැරි වුණා — ${mediaErr.message}_`
+                    text: `⚠️ _Media send කරන්න බැරි වුණා: ${mediaErr.message}_`
                 });
             }
 
