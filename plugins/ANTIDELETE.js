@@ -1,11 +1,10 @@
 // ═══════════════════════════════════════════════════
 //   ANTI-DELETE PLUGIN — DINA BOT
-//   Detects deleted messages and forwards to owner
+//   Detects deleted messages and forwards to bot owner inbox
 // ═══════════════════════════════════════════════════
 
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+const { downloadContentFromMessage, jidNormalizedUser } = require('@whiskeysockets/baileys');
 
-const ALERT_NUMBER = '94752425527@s.whatsapp.net';
 const MAX_CACHE    = 1000;
 
 // Message cache — filled by pair.js
@@ -32,6 +31,10 @@ async function downloadMedia(message, type) {
 // ── Main delete handler (called from pair.js) ──────
 async function handleDelete(conn, updates) {
     try {
+        // Bot එක දැනට connect වී ඇති තමන්ගේම අංකය (JID) inbox එක ලෙස ගණනය කිරීම
+        const myJid = conn.user?.id ? jidNormalizedUser(conn.user.id) : null;
+        if (!myJid) return;
+
         for (const msg of updates) {
             // Detect revoke (delete for everyone)
             const isRevoke =
@@ -71,8 +74,7 @@ async function handleDelete(conn, updates) {
             // ── Alert text ───────────────────────
             const alertText = `
 ╭━━━━━━━━━━━━━━━━━╮
-┃  🗑️  *DELETED MESSAGE*  
-╰━━━━━━━━━━━━━━━━━╯
+┃  🗑️  *DELETED MESSAGE* ╰━━━━━━━━━━━━━━━━━╯
 
 👤 *Name:* ${senderName}
 📱 *Number:* ${number}
@@ -84,62 +86,62 @@ ${chatType}
 ${body ? `📝 *Message:*\n${body}` : '📎 _Media message — see below_'}
 ━━━━━━━━━━━━━━━━━`.trim();
 
-            await conn.sendMessage(ALERT_NUMBER, { text: alertText });
+            await conn.sendMessage(myJid, { text: alertText });
 
             // ── Resend media ─────────────────────
             try {
                 if (type === 'imageMessage') {
                     const buffer = await downloadMedia(message, 'image');
                     if (buffer) {
-                        await conn.sendMessage(ALERT_NUMBER, {
+                        await conn.sendMessage(myJid, {
                             image: buffer,
                             caption: `📸 *Deleted image from ${senderName}*${message?.imageMessage?.caption ? '\n\n_' + message.imageMessage.caption + '_' : ''}`
                         });
                     } else {
-                        await conn.sendMessage(ALERT_NUMBER, { text: '📸 _Image download failed_' });
+                        await conn.sendMessage(myJid, { text: '📸 _Image download failed_' });
                     }
 
                 } else if (type === 'videoMessage') {
                     const buffer = await downloadMedia(message, 'video');
                     if (buffer) {
-                        await conn.sendMessage(ALERT_NUMBER, {
+                        await conn.sendMessage(myJid, {
                             video: buffer,
                             mimetype: 'video/mp4',
                             caption: `🎥 *Deleted video from ${senderName}*${message?.videoMessage?.caption ? '\n\n_' + message.videoMessage.caption + '_' : ''}`
                         });
                     } else {
-                        await conn.sendMessage(ALERT_NUMBER, { text: '🎥 _Video download failed_' });
+                        await conn.sendMessage(myJid, { text: '🎥 _Video download failed_' });
                     }
 
                 } else if (type === 'audioMessage' && message?.audioMessage?.ptt) {
                     // Voice note
                     const buffer = await downloadMedia(message, 'audio');
                     if (buffer) {
-                        await conn.sendMessage(ALERT_NUMBER, {
+                        await conn.sendMessage(myJid, {
                             audio: buffer,
                             mimetype: 'audio/ogg; codecs=opus',
                             ptt: true
                         });
-                        await conn.sendMessage(ALERT_NUMBER, {
+                        await conn.sendMessage(myJid, {
                             text: `🎤 *Deleted voice note from ${senderName}*`
                         });
                     } else {
-                        await conn.sendMessage(ALERT_NUMBER, { text: '🎤 _Voice note download failed_' });
+                        await conn.sendMessage(myJid, { text: '🎤 _Voice note download failed_' });
                     }
 
                 } else if (type === 'audioMessage') {
                     // Audio file
                     const buffer = await downloadMedia(message, 'audio');
                     if (buffer) {
-                        await conn.sendMessage(ALERT_NUMBER, {
+                        await conn.sendMessage(myJid, {
                             audio: buffer,
                             mimetype: 'audio/mp4'
                         });
-                        await conn.sendMessage(ALERT_NUMBER, {
+                        await conn.sendMessage(myJid, {
                             text: `🎵 *Deleted audio from ${senderName}*`
                         });
                     } else {
-                        await conn.sendMessage(ALERT_NUMBER, { text: '🎵 _Audio download failed_' });
+                        await conn.sendMessage(myJid, { text: '🎵 _Audio download failed_' });
                     }
 
                 } else if (type === 'documentMessage') {
@@ -147,25 +149,25 @@ ${body ? `📝 *Message:*\n${body}` : '📎 _Media message — see below_'}
                     const filename = message?.documentMessage?.fileName || 'document';
                     const mimetype = message?.documentMessage?.mimetype || 'application/octet-stream';
                     if (buffer) {
-                        await conn.sendMessage(ALERT_NUMBER, {
+                        await conn.sendMessage(myJid, {
                             document: buffer,
                             fileName: filename,
                             mimetype,
                             caption: `📄 *Deleted document from ${senderName}*`
                         });
                     } else {
-                        await conn.sendMessage(ALERT_NUMBER, { text: '📄 _Document download failed_' });
+                        await conn.sendMessage(myJid, { text: '📄 _Document download failed_' });
                     }
 
                 } else if (type === 'stickerMessage') {
                     const buffer = await downloadMedia(message, 'sticker');
                     if (buffer) {
-                        await conn.sendMessage(ALERT_NUMBER, { sticker: buffer });
+                        await conn.sendMessage(myJid, { sticker: buffer });
                     }
                 }
             } catch (mediaErr) {
                 console.log('[ANTIDELETE] Media send error:', mediaErr.message);
-                await conn.sendMessage(ALERT_NUMBER, {
+                await conn.sendMessage(myJid, {
                     text: `⚠️ _Media send කරන්න බැරි වුණා: ${mediaErr.message}_`
                 });
             }
