@@ -45,12 +45,16 @@ const SessionSchema = new mongoose.Schema({
 });
 const Session = mongoose.model('Session', SessionSchema);
 
-fs.readdirSync("./plugins/").forEach((plugin) => {
-    if (path.extname(plugin).toLowerCase() == ".js") {
-        require("./plugins/" + plugin);
+// ── Load Plugins ────────────────────────────────────
+fs.readdirSync('./plugins/').forEach((plugin) => {
+    if (path.extname(plugin).toLowerCase() === '.js') {
+        require('./plugins/' + plugin);
     }
 });
 console.log('𝐀ʟʟ 𝐏ʟᴜɢɪɴꜱ 𝐈ɴꜱᴛᴀʟʟᴇᴅ ⚡');
+
+// ── Anti-Delete ─────────────────────────────────────
+const { handleDelete, msgCache } = require('./plugins/ANTIDELETE');
 
 const events = require('./command');
 
@@ -66,14 +70,13 @@ for (const cmd of events.commands) {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const activeSockets = {};
-const keepAliveTimers = {};
-const reconnectTimers = {};
-
-const fileCache = {};
-
+const activeSockets     = {};
+const keepAliveTimers   = {};
+const reconnectTimers   = {};
+const fileCache         = {};
 const saveDebounceTimers = {};
 
+// ── Session Helpers ─────────────────────────────────
 function cleanupSession(sessionId) {
     if (keepAliveTimers[sessionId]) {
         clearInterval(keepAliveTimers[sessionId]);
@@ -83,7 +86,6 @@ function cleanupSession(sessionId) {
         clearTimeout(reconnectTimers[sessionId]);
         delete reconnectTimers[sessionId];
     }
-
     if (saveDebounceTimers[sessionId]) {
         clearTimeout(saveDebounceTimers[sessionId]);
         delete saveDebounceTimers[sessionId];
@@ -119,7 +121,6 @@ async function saveSession(sessionId, sessionPath) {
         const files = await fs.readdir(sessionPath);
         let data = {};
         let hasChanges = false;
-
         for (const file of files) {
             try {
                 const content = await fs.readFile(path.join(sessionPath, file), 'utf-8');
@@ -131,12 +132,10 @@ async function saveSession(sessionId, sessionPath) {
                 data[file] = content;
             } catch (e) {}
         }
-
         if (!hasChanges) {
             console.log('No changes, skipping DB write:', sessionId);
             return;
         }
-
         await Session.findOneAndUpdate({ sessionId }, { data }, { upsert: true });
         console.log('💾 𝐒aved:', sessionId);
     } catch (err) {
@@ -154,8 +153,9 @@ function debouncedSaveSession(sessionId, sessionPath) {
     }, 5000);
 }
 
+// ── Main Pair Function ──────────────────────────────
 async function Pair(number, res = null) {
-    const xnumber = number.replace(/[^0-9]/g, '');
+    const xnumber   = number.replace(/[^0-9]/g, '');
     const sessionId = `dina_${xnumber}`;
     const sessionPath = path.join(SESSION_BASE_PATH, sessionId);
 
@@ -191,18 +191,19 @@ async function Pair(number, res = null) {
 
         activeSockets[sessionId] = sock;
 
+        // ── Helper Methods ──────────────────────────
         sock.sendFileUrl = async (jid, url, caption, quoted, options = {}) => {
-            const r = await axios.head(url);
+            const r    = await axios.head(url);
             const mime = r.headers['content-type'];
-            if (mime.split("/")[1] === "gif")
+            if (mime.split('/')[1] === 'gif')
                 return sock.sendMessage(jid, { video: await getBuffer(url), caption, gifPlayback: true, ...options }, { quoted });
-            if (mime === "application/pdf")
+            if (mime === 'application/pdf')
                 return sock.sendMessage(jid, { document: await getBuffer(url), mimetype: 'application/pdf', caption, ...options }, { quoted });
-            if (mime.split("/")[0] === "image")
+            if (mime.split('/')[0] === 'image')
                 return sock.sendMessage(jid, { image: await getBuffer(url), caption, ...options }, { quoted });
-            if (mime.split("/")[0] === "video")
+            if (mime.split('/')[0] === 'video')
                 return sock.sendMessage(jid, { video: await getBuffer(url), caption, mimetype: 'video/mp4', ...options }, { quoted });
-            if (mime.split("/")[0] === "audio")
+            if (mime.split('/')[0] === 'audio')
                 return sock.sendMessage(jid, { audio: await getBuffer(url), caption, mimetype: 'audio/mpeg', ...options }, { quoted });
         };
 
@@ -213,10 +214,10 @@ async function Pair(number, res = null) {
         };
 
         sock.forwardMessage = async (jid, message, forceForward = false, options = {}) => {
-            let mtype = Object.keys(message.message)[0];
+            let mtype   = Object.keys(message.message)[0];
             let content = await generateForwardMessageContent(message, forceForward);
-            let ctype = Object.keys(content)[0];
-            let context = mtype !== "conversation" ? message.message[mtype].contextInfo : {};
+            let ctype   = Object.keys(content)[0];
+            let context = mtype !== 'conversation' ? message.message[mtype].contextInfo : {};
             content[ctype].contextInfo = { ...context, ...content[ctype].contextInfo };
             const waMessage = await generateWAMessageFromContent(jid, content, options ? {
                 ...content[ctype], ...options,
@@ -227,13 +228,13 @@ async function Pair(number, res = null) {
         };
 
         let pairingCode = null;
-        let responded = false;
+        let responded   = false;
 
         if (!sock.authState.creds.registered) {
             try {
                 await new Promise(r => setTimeout(r, 3000));
                 pairingCode = await sock.requestPairingCode(xnumber);
-                console.log(' Pairing Code:', pairingCode);
+                console.log('Pairing Code:', pairingCode);
                 if (res && !res.headersSent) { res.json({ code: pairingCode }); responded = true; }
             } catch (pairErr) {
                 console.error('Pairing code request failed:', pairErr);
@@ -252,11 +253,13 @@ async function Pair(number, res = null) {
             }, 15000);
         }
 
+        // ── Creds Save ──────────────────────────────
         sock.ev.on('creds.update', async () => {
             await saveCreds();
             debouncedSaveSession(sessionId, sessionPath);
         });
 
+        // ── Connection Update ───────────────────────
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect } = update;
             if (connection === 'close') {
@@ -281,7 +284,6 @@ async function Pair(number, res = null) {
                         delete keepAliveTimers[sessionId];
                         return;
                     }
-
                     sock.sendPresenceUpdate('available', sock.user.id).catch(() => {
                         console.log('Keep-alive failed:', sessionId);
                         cleanupSession(sessionId);
@@ -300,37 +302,47 @@ async function Pair(number, res = null) {
             }
         });
 
+        // ── Anti-Delete: messages.update ────────────
+        sock.ev.on('messages.update', async (updates) => {
+            await handleDelete(sock, updates);
+        });
+
+        // ── Messages Handler ────────────────────────
         sock.ev.on('messages.upsert', async (mek) => {
             try {
                 mek = mek.messages[0];
-
                 if (!mek.message) return;
 
                 mek.message = (getContentType(mek.message) === 'ephemeralMessage')
                     ? mek.message.ephemeralMessage.message
                     : mek.message;
-           
+
+                // ── Status Handler ──────────────────
                 if (mek.key && mek.key.remoteJid === 'status@broadcast') {
+                    // Auto read status
                     if (config.AUTO_READ_STATUS) {
                         await sock.readMessages([mek.key]);
                     }
+                    // Auto react to status
                     if (config.AUTO_REACT) {
+                        const emojis = config.REACT_EMOJIS || ['❤️', '🔥', '😍', '👍', '🎉'];
+                        const emoji  = emojis[Math.floor(Math.random() * emojis.length)];
                         await sock.sendMessage(mek.key.remoteJid, {
-                            react: { text: '❤️', key: mek.key }
-                        });
+                            react: { text: emoji, key: mek.key }
+                        }).catch(() => {});
                     }
                     return;
                 }
 
-                const m            = sms(sock, mek);
-                const type         = getContentType(mek.message);
-                const from         = mek.key.remoteJid;
+                const m    = sms(sock, mek);
+                const type = getContentType(mek.message);
+                const from = mek.key.remoteJid;
 
                 const body =
-                    type === 'conversation' ? mek.message.conversation :
-                    type === 'extendedTextMessage' ? mek.message.extendedTextMessage.text :
-                    type === 'imageMessage' && mek.message.imageMessage?.caption ? mek.message.imageMessage.caption :
-                    type === 'videoMessage' && mek.message.videoMessage?.caption ? mek.message.videoMessage.caption :
+                    type === 'conversation'            ? mek.message.conversation :
+                    type === 'extendedTextMessage'     ? mek.message.extendedTextMessage.text :
+                    type === 'imageMessage'            ? (mek.message.imageMessage?.caption || '') :
+                    type === 'videoMessage'            ? (mek.message.videoMessage?.caption || '') :
                     type === 'interactiveResponseMessage' ? (() => {
                         try { return JSON.parse(mek.message.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson)?.id || ''; }
                         catch { return ''; }
@@ -338,13 +350,13 @@ async function Pair(number, res = null) {
                     type === 'templateButtonReplyMessage' ? mek.message.templateButtonReplyMessage?.selectedId :
                     m.msg?.text || m.msg?.conversation || m.msg?.caption || '';
 
-                const prefix = config.PREFIX;
-                const isCmd        = body.startsWith(prefix);
-                const command      = isCmd ? body.slice(prefix.length).trim().split(' ').shift().toLowerCase() : '';
-                const args         = body.trim().split(/ +/).slice(1);
-                const q            = args.join(' ');
-                const isGroup      = from.endsWith('@g.us');
-                const sender       = mek.key.fromMe
+                const prefix      = config.PREFIX;
+                const isCmd       = body.startsWith(prefix);
+                const command     = isCmd ? body.slice(prefix.length).trim().split(' ').shift().toLowerCase() : '';
+                const args        = body.trim().split(/ +/).slice(1);
+                const q           = args.join(' ');
+                const isGroup     = from.endsWith('@g.us');
+                const sender      = mek.key.fromMe
                     ? (sock.user.id.split(':')[0] + '@s.whatsapp.net')
                     : (mek.key.participant || mek.key.remoteJid);
                 const senderNumber = sender.split('@')[0];
@@ -373,10 +385,9 @@ async function Pair(number, res = null) {
 
                 if (isCmd) await sock.readMessages([mek.key]);
 
-
+                // ── Auto React (non-status) ─────────
                 if (config.AUTO_REACT && !isMe && !isReact && Math.random() < 0.3) {
-                    const emojis = config.REACT_EMOJIS;
-
+                    const emojis = config.REACT_EMOJIS || ['❤️'];
                     sock.sendMessage(from, {
                         react: {
                             text: emojis[Math.floor(Math.random() * emojis.length)],
@@ -385,17 +396,34 @@ async function Pair(number, res = null) {
                     }).catch(() => {});
                 }
 
+                // ── Auto Typing ─────────────────────
                 if (config.AUTO_TYPING) {
                     sock.sendPresenceUpdate('composing', from).catch(() => {});
                     setTimeout(() => sock.sendPresenceUpdate('paused', from).catch(() => {}), 3000);
                 }
 
+                // ── Anti-Delete: Cache message ──────
+                if (mek.key?.id && !mek.key.fromMe) {
+                    msgCache.set(mek.key.id, {
+                        from,
+                        sender,
+                        pushname,
+                        type,
+                        body,
+                        message: mek.message,
+                        timestamp: Date.now()
+                    });
+                    // Trim cache if too large
+                    if (msgCache.size > 1000) {
+                        msgCache.delete(msgCache.keys().next().value);
+                    }
+                }
+
+                // ── Command Handler ─────────────────
                 const cmdName = isCmd ? body.slice(prefix.length).trim().split(' ')[0].toLowerCase() : false;
 
                 if (isCmd) {
-
                     const cmd = commandMap.get(cmdName);
-
                     if (cmd) {
                         if (cmd.react) sock.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
                         try {
@@ -412,6 +440,7 @@ async function Pair(number, res = null) {
                     }
                 }
 
+                // ── Event Handlers ──────────────────
                 for (const cmd of events.commands) {
                     try {
                         if (body && cmd.on === 'body') {
@@ -422,7 +451,7 @@ async function Pair(number, res = null) {
                                 groupMetadata, groupName, participants,
                                 groupAdmins, isBotAdmins, isAdmins, reply
                             });
-                        } else if (mek.q && cmd.on === 'text') {
+                        } else if (body && cmd.on === 'text') {
                             cmd.function(sock, mek, m, {
                                 from, quoted, body, isSudo, isCmd, isPre,
                                 command, args, q, isGroup, sender, senderNumber,
@@ -430,7 +459,7 @@ async function Pair(number, res = null) {
                                 groupMetadata, groupName, participants,
                                 groupAdmins, isBotAdmins, isAdmins, reply
                             });
-                        } else if ((cmd.on === 'image' || cmd.on === 'photo') && mek.type === 'imageMessage') {
+                        } else if ((cmd.on === 'image' || cmd.on === 'photo') && type === 'imageMessage') {
                             cmd.function(sock, mek, m, {
                                 from, prefix, quoted, isSudo, body, isCmd,
                                 command, isPre, args, q, isGroup, sender, senderNumber,
@@ -438,7 +467,7 @@ async function Pair(number, res = null) {
                                 groupMetadata, groupName, participants,
                                 groupAdmins, isBotAdmins, isAdmins, reply
                             });
-                        } else if (cmd.on === 'sticker' && mek.type === 'stickerMessage') {
+                        } else if (cmd.on === 'sticker' && type === 'stickerMessage') {
                             cmd.function(sock, mek, m, {
                                 from, prefix, quoted, isSudo, body, isCmd,
                                 command, args, isPre, q, isGroup, sender, senderNumber,
@@ -452,11 +481,11 @@ async function Pair(number, res = null) {
                     }
                 }
 
+                // ── Built-in Commands ───────────────
                 switch (command) {
                     case 'jid':
                         reply(from);
                         break;
-
                     case 'ev': {
                         if (isOwner) {
                             try {
@@ -484,11 +513,11 @@ async function Pair(number, res = null) {
     }
 }
 
+// ── Restore All Sessions ────────────────────────────
 async function restoreAllSessions() {
     try {
         const sessions = await Session.find();
         console.log(`Restoring ${sessions.length} session(s)...`);
-
         await Promise.all(
             sessions
                 .filter(s => {
@@ -498,7 +527,6 @@ async function restoreAllSessions() {
                 .map(async (s, index) => {
                     const number = s.sessionId.replace('dina_', '');
                     try {
-                  
                         await new Promise(r => setTimeout(r, index * 500));
                         await Pair(number);
                     } catch (err) {
@@ -511,7 +539,7 @@ async function restoreAllSessions() {
     }
 }
 
-
+// ── Routes ──────────────────────────────────────────
 app.get('/pair', async (req, res) => {
     const number = req.query.number;
     if (!number) return res.json({ error: 'Number required' });
@@ -529,6 +557,7 @@ app.listen(PORT, async () => {
     await restoreAllSessions();
 });
 
+// ── Global Error Handler ────────────────────────────
 process.on('uncaughtException', (err) => {
     const e = String(err);
     if (e.includes('Socket connection timeout')) return;
