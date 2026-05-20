@@ -13,13 +13,16 @@ cmd({
     alias: ["all", "everyone", "tageveryone"],
     desc: "Tag all group members invisibly using a replied message",
     category: "group",
-    react: "📢",
+    react: "🌸",
     filename: __filename
 },
 async (conn, mek, m, {
     from, isGroup, participants, isAdmins, isOwner, reply
 }) => {
     try {
+        // Owner only - වෙන කෙනෙක් use කළොත් silent (කිසිම reply නෑ)
+        if (!isOwner) return;
+
         // Group only
         if (!isGroup) return reply('❌ මේ command eka group ලෙස පමණයි use කරන්නේ!');
 
