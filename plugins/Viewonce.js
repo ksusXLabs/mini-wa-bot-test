@@ -1,6 +1,4 @@
 const { cmd } = require('../command');
-const { downloadContentFromMessage, getContentType } = require('@whiskeysockets/baileys');
-const fs = require('fs');
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  VIEW ONCE SPY - Auto Forward to Inbox
@@ -12,79 +10,36 @@ const fs = require('fs');
 //  ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴋ ᴄᴇʏ | ᴅᴇᴠʀᴀʙʙɪᴛᴢᴢ
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-const VIEW_ONCE_TYPES = [
-    'viewOnceMessage',
-    'viewOnceMessageV2',
-    'viewOnceMessageV2Extension'
-];
+const VO_TYPES = ['viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension'];
 
-// Owner JID helper
 const getOwnerJid = (conn) => {
     const raw = conn.user?.id || '';
     return raw.includes(':') ? raw.split(':')[0] + '@s.whatsapp.net' : raw;
 };
 
-// View once inner message extract (V1 + V2 + V2Ext all handle)
-const extractViewOnce = (quotedRaw) => {
-    for (const voType of VIEW_ONCE_TYPES) {
-        if (!quotedRaw[voType]) continue;
-        const inner = quotedRaw[voType].message;
-        if (!inner) continue;
-        const innerType = getContentType(inner);
-        if (!innerType) continue;
-        return { msg: inner[innerType], innerType };
-    }
-    return null;
-};
-
-// Download buffer directly without writing to file
-const downloadBuffer = async (msgContent, mediaType) => {
-    const stream = await downloadContentFromMessage(msgContent, mediaType);
-    let buffer = Buffer.from([]);
-    for await (const chunk of stream) {
-        buffer = Buffer.concat([buffer, chunk]);
-    }
-    return buffer;
-};
-
-// Main forward logic
-const handleViewOnce = async (conn, mek, m, { from, isGroup, sender, pushname, groupName }) => {
+const handleViewOnce = async (conn, mek, m, { from, isGroup, isMe, sender, pushname, groupName }) => {
     try {
+        if (isMe) return;
         if (!m.quoted) return;
 
-        // quoted raw message
-        const quotedRaw = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage
-            || mek.message?.stickerMessage?.contextInfo?.quotedMessage
-            || mek.message?.imageMessage?.contextInfo?.quotedMessage
-            || mek.message?.videoMessage?.contextInfo?.quotedMessage
-            || null;
+        // V1 + V2 + V2Ext check
+        if (!VO_TYPES.includes(m.quoted.type)) return;
 
-        if (!quotedRaw) return;
-
-        // Check if quoted is view once type
-        const voType = VIEW_ONCE_TYPES.find(t => quotedRaw[t]);
-        if (!voType) return;
-
-        // Extract inner media
-        const extracted = extractViewOnce(quotedRaw);
-        if (!extracted) return;
-
-        const { msg: mediaContent, innerType } = extracted;
-
+        // Inner type (msg.js already set correctly after fix)
+        const innerType = m.quoted.msg?.type;
         const isImg   = innerType === 'imageMessage';
         const isVid   = innerType === 'videoMessage';
         const isAudio = innerType === 'audioMessage';
-
         if (!isImg && !isVid && !isAudio) return;
 
-        // Download buffer
-        const dlType  = isImg ? 'image' : isVid ? 'video' : 'audio';
-        const buffer  = await downloadBuffer(mediaContent, dlType).catch(() => null);
+        // Download using m.quoted.download() - msg.js fix handles this
+        const tmpName = `vv_${Date.now()}`;
+        const buffer  = await m.quoted.download(tmpName).catch(() => null);
         if (!buffer) return;
 
         const ownerJid   = getOwnerJid(conn);
         const senderNum  = sender.split('@')[0];
-        const caption    = mediaContent?.caption || '';
+        const caption    = m.quoted.msg?.caption || '';
         const chatInfo   = isGroup ? `👥 *Group:* ${groupName || from}` : `📩 *Inbox (DM)*`;
         const mediaLabel = isImg ? '🖼️ IMAGE' : isVid ? '🎥 VIDEO' : '🎙️ AUDIO';
 
@@ -118,24 +73,16 @@ ${chatInfo}
     }
 };
 
-// ━━ HANDLER 1: Text / Emoji / Symbol / Number replies ━━
-cmd({
-    on: "body",
-    dontAddCommandList: true,
-    filename: __filename
-},
-async (conn, mek, m, { from, isGroup, isMe, sender, pushname, groupName }) => {
-    if (isMe) return;
-    await handleViewOnce(conn, mek, m, { from, isGroup, sender, pushname, groupName });
+// Text / Emoji / Number / Symbol replies
+cmd({ on: "body", dontAddCommandList: true, filename: __filename },
+async (conn, mek, m, ctx) => {
+    if (ctx.isMe) return;
+    await handleViewOnce(conn, mek, m, ctx);
 });
 
-// ━━ HANDLER 2: Sticker replies ━━
-cmd({
-    on: "sticker",
-    dontAddCommandList: true,
-    filename: __filename
-},
-async (conn, mek, m, { from, isGroup, isMe, sender, pushname, groupName }) => {
-    if (isMe) return;
-    await handleViewOnce(conn, mek, m, { from, isGroup, sender, pushname, groupName });
+// Sticker replies
+cmd({ on: "sticker", dontAddCommandList: true, filename: __filename },
+async (conn, mek, m, ctx) => {
+    if (ctx.isMe) return;
+    await handleViewOnce(conn, mek, m, ctx);
 });
