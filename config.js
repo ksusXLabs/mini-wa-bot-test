@@ -1,5 +1,5 @@
 module.exports = {
-    PREFIX: "/",
+    PREFIX: "¡",
     AUTO_READ_STATUS: false,
     AUTO_REACT: false,
     AUTO_TYPING: false,
