@@ -1,4 +1,6 @@
 const { cmd } = require('../command');
+const { downloadContentFromMessage, getContentType } = require('@whiskeysockets/baileys');
+const fs = require('fs');
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  VIEW ONCE SPY - Auto Forward to Inbox
@@ -10,42 +12,80 @@ const { cmd } = require('../command');
 //  ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴋ ᴄᴇʏ | ᴅᴇᴠʀᴀʙʙɪᴛᴢᴢ
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-// ── Owner JID helper ──
+const VIEW_ONCE_TYPES = [
+    'viewOnceMessage',
+    'viewOnceMessageV2',
+    'viewOnceMessageV2Extension'
+];
+
+// Owner JID helper
 const getOwnerJid = (conn) => {
     const raw = conn.user?.id || '';
-    return raw.includes(':')
-        ? raw.split(':')[0] + '@s.whatsapp.net'
-        : raw;
+    return raw.includes(':') ? raw.split(':')[0] + '@s.whatsapp.net' : raw;
 };
 
-// ── View once forward helper ──
-const forwardViewOnce = async (conn, mek, m, { from, isGroup, sender, pushname, groupName }) => {
+// View once inner message extract (V1 + V2 + V2Ext all handle)
+const extractViewOnce = (quotedRaw) => {
+    for (const voType of VIEW_ONCE_TYPES) {
+        if (!quotedRaw[voType]) continue;
+        const inner = quotedRaw[voType].message;
+        if (!inner) continue;
+        const innerType = getContentType(inner);
+        if (!innerType) continue;
+        return { msg: inner[innerType], innerType };
+    }
+    return null;
+};
+
+// Download buffer directly without writing to file
+const downloadBuffer = async (msgContent, mediaType) => {
+    const stream = await downloadContentFromMessage(msgContent, mediaType);
+    let buffer = Buffer.from([]);
+    for await (const chunk of stream) {
+        buffer = Buffer.concat([buffer, chunk]);
+    }
+    return buffer;
+};
+
+// Main forward logic
+const handleViewOnce = async (conn, mek, m, { from, isGroup, sender, pushname, groupName }) => {
     try {
-        // Quoted message check
         if (!m.quoted) return;
-        // View once type check - this is the key detection
-        if (m.quoted.type !== 'viewOnceMessage') return;
 
-        const ownerJid  = getOwnerJid(conn);
-        const senderNum = sender.split('@')[0];
-        const innerType = m.quoted.msg?.type || '';
+        // quoted raw message
+        const quotedRaw = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage
+            || mek.message?.stickerMessage?.contextInfo?.quotedMessage
+            || mek.message?.imageMessage?.contextInfo?.quotedMessage
+            || mek.message?.videoMessage?.contextInfo?.quotedMessage
+            || null;
 
-        // Image / Video / Audio determine
+        if (!quotedRaw) return;
+
+        // Check if quoted is view once type
+        const voType = VIEW_ONCE_TYPES.find(t => quotedRaw[t]);
+        if (!voType) return;
+
+        // Extract inner media
+        const extracted = extractViewOnce(quotedRaw);
+        if (!extracted) return;
+
+        const { msg: mediaContent, innerType } = extracted;
+
         const isImg   = innerType === 'imageMessage';
         const isVid   = innerType === 'videoMessage';
         const isAudio = innerType === 'audioMessage';
 
         if (!isImg && !isVid && !isAudio) return;
 
-        // Download view once media
-        const buffer = await m.quoted.download().catch(() => null);
+        // Download buffer
+        const dlType  = isImg ? 'image' : isVid ? 'video' : 'audio';
+        const buffer  = await downloadBuffer(mediaContent, dlType).catch(() => null);
         if (!buffer) return;
 
-        const caption  = m.quoted.msg?.caption || '';
-        const chatInfo = isGroup
-            ? `👥 *Group:* ${groupName || from}`
-            : `📩 *Inbox (DM)*`;
-
+        const ownerJid   = getOwnerJid(conn);
+        const senderNum  = sender.split('@')[0];
+        const caption    = mediaContent?.caption || '';
+        const chatInfo   = isGroup ? `👥 *Group:* ${groupName || from}` : `📩 *Inbox (DM)*`;
         const mediaLabel = isImg ? '🖼️ IMAGE' : isVid ? '🎥 VIDEO' : '🎙️ AUDIO';
 
         const details = `
@@ -64,8 +104,7 @@ ${chatInfo}
             await conn.sendMessage(ownerJid, { image: buffer, caption: details });
         } else if (isVid) {
             await conn.sendMessage(ownerJid, { video: buffer, caption: details });
-        } else if (isAudio) {
-            // Details msg first, then audio
+        } else {
             await conn.sendMessage(ownerJid, { text: details });
             await conn.sendMessage(ownerJid, {
                 audio: buffer,
@@ -87,7 +126,7 @@ cmd({
 },
 async (conn, mek, m, { from, isGroup, isMe, sender, pushname, groupName }) => {
     if (isMe) return;
-    await forwardViewOnce(conn, mek, m, { from, isGroup, sender, pushname, groupName });
+    await handleViewOnce(conn, mek, m, { from, isGroup, sender, pushname, groupName });
 });
 
 // ━━ HANDLER 2: Sticker replies ━━
@@ -98,5 +137,5 @@ cmd({
 },
 async (conn, mek, m, { from, isGroup, isMe, sender, pushname, groupName }) => {
     if (isMe) return;
-    await forwardViewOnce(conn, mek, m, { from, isGroup, sender, pushname, groupName });
+    await handleViewOnce(conn, mek, m, { from, isGroup, sender, pushname, groupName });
 });
