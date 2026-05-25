@@ -10,7 +10,7 @@ if (!fs.existsSync(pdfFolder)) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  1. PDF එක Save කරගන්නා කොටස (Admin/Owner Only)
+//  1. PDF එක Save කරගන්නා කොටස (Strict Owner Only)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 cmd({
     pattern: "up",
@@ -19,12 +19,28 @@ cmd({
     react: "📥",
     filename: __filename
 },
-async (conn, mek, m, { from, isOwner, reply, q }) => {
+async (conn, mek, m, { from, reply, q }) => {
     try {
-        if (!isOwner) return;
+        // බොට් මැසේජ් එක එවපු කෙනාගේ අංකය (Ex: 94752425527@s.whatsapp.net)
+        const senderNumber = m.sender;
+        const allowedAdmin = '94752425527@s.whatsapp.net';
+
+        // අංකය ගැලපෙන්නේ නැත්නම් පද්ධතිය ප්‍රතික්ෂේප කරයි
+        if (senderNumber !== allowedAdmin) {
+            return reply(
+`🚫 𝐀𝐜𝐜𝐞𝐬𝐬 𝐃𝐞𝐧𝐢𝐞𝐝!
+
+🚨 ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ʀᴇᴄᴏɢɴɪᴢᴇᴅ ᴀꜱ ᴛʜᴇ ᴀᴅᴍɪɴ ᴏʀ ᴏᴡɴᴇʀ. 💡 ᴛʜɪꜱ ᴄᴏᴍᴍᴀɴᴅ ʀᴇQᴜɪʀᴇꜱ ꜱᴘᴇᴄɪᴀʟ ᴘᴇʀᴍɪꜱꜱɪᴏɴꜱ.
+
+👤 ᴏᴡɴᴇʀ: *K CeY* 🥕
+📞 ​ᴄᴏɴᴛᴀᴄᴛ: *+94752425527 to request access.*
+
+> 𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝙱𝚢 𝘒 𝘊𝘦𝘠 | +𝟿𝟺𝟽𝟻𝟸𝟺𝟸𝟻𝟻𝟸𝟽`
+            );
+        }
 
         if (!q) {
-            return reply("❌ කරුණාකර PDF එක සඳහා shortcut නමක් ලබා දෙන්න.\n💡 *Ex:* !up science_paper");
+            return reply("❌ ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ sʜᴏʀᴛᴄᴜᴛ ɴᴀᴍᴇ ғᴏʀ ᴛʜᴇ ᴘᴅғ.\n💡 *ᴇx:* ¡up term_test");
         }
 
         const cmdName = q.trim().toLowerCase().replace(/\s+/g, '_'); 
@@ -33,10 +49,10 @@ async (conn, mek, m, { from, isOwner, reply, q }) => {
 
         const mime = quoted?.msg?.mimetype || '';
         if (quotedType !== 'documentMessage' || !/pdf/.test(mime)) {
-            return reply("❌ කරුණාකර PDF Document එකකට Reply කර මෙම command එක ලබාදෙන්න.");
+            return reply("❌ ᴘʟᴇᴀsᴇ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴘᴅғ ᴅᴏᴄᴜᴍᴇɴᴛ ᴀɴᴅ ᴘʀᴏᴠɪᴅᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.");
         }
 
-        reply("⏳ PDF එක Readers Heaven වෙත Download වෙමින් පවතී, කරුණාකර රැඳී සිටින්න...");
+        reply("⏳ ᴛʜᴇ ᴘᴅғ ɪs ʙᴇɪɴ章 ᴜᴘʟᴏᴀᴅᴇᴅ ᴛᴏ ᴛʜᴇ ᴅᴀᴛᴀʙᴀsᴇ, ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ...\n\n> 𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝙱𝚢 𝘒 𝘊𝘦𝘠 | +𝟿𝟺𝟽𝟻𝟸𝟺𝟸𝟻𝟻𝟸𝟽");
 
         const buffer = await downloadMediaMessage(
             { message: quoted, key: { ...mek.key, id: quoted.id, participant: quoted.sender } },
@@ -44,16 +60,16 @@ async (conn, mek, m, { from, isOwner, reply, q }) => {
             {}
         ).catch(() => null);
 
-        if (!buffer) return reply("❌ PDF එක Download කිරීමට නොහැකි විය. නැවත උත්සාහ කරන්න.");
+        if (!buffer) return reply("❌ ᴄᴏᴜʟᴅ ɴᴏᴛ ᴅᴏᴡɴʟᴏᴀᴅ ᴘᴅғ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.");
 
         const filePath = path.join(pdfFolder, `${cmdName}.pdf`);
         fs.writeFileSync(filePath, buffer);
 
         reply(
-`✅ *PDF එක සාර්ථකව සේව් කරගත්තා!*\n
-📂 *Name:* ${cmdName}\n
-💡 දැන් ඕනෑම අයෙකුට *!pdf ${cmdName}* ලෙස භාවිත කර මෙම PDF එක ලබාගත හැක.\n
-𝘗𝘰𝘸𝘦𝘳𝘦𝘥 𝘣𝘺 𝘒 𝘊𝘦𝘠 | +𝟿𝟺𝟽𝟻𝟸𝟺𝟸𝟻𝟻𝟸𝟽`
+`✅ 𝐏𝐃𝐅 𝐬𝐚𝐯𝐞𝐝 𝐬𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲!\n\n
+📂 ᴄᴍᴅ ɴᴀᴍᴇ: *${cmdName}*\n\n
+💡 ɴᴏᴡ ᴀɴʏᴏɴᴇ ᴄᴀɴ ᴀᴄᴄᴇꜱꜱ ᴛʜɪꜱ ᴘᴅꜰ ᴜꜱɪɴ章 *¡ᴘᴅꜰ ${cmdName}*.\n\n
+> 𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝙱𝚢 𝘒 𝘊𝘦𝘠 | +𝟿𝟺𝟽𝟻𝟸𝟺𝟸𝟻𝟻𝟸𝟽`
         );
 
     } catch (e) {
@@ -76,14 +92,14 @@ cmd({
 async (conn, mek, m, { from, reply, q }) => {
     try {
         if (!q) {
-            return reply("❌ කරුණාකර ලබාගත යුතු PDF එකේ නම ඇතුලත් කරන්න.\n💡 *Ex:* !pdf science_paper");
+            return reply("⛔ ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴛʜᴇ ɴᴀᴍᴇ ᴏғ ᴛʜᴇ ᴘᴅғ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴅᴏᴡɴʟᴏᴀᴅ.\n💡 *Ex:* ¡pdf science_paper");
         }
 
         const requestedCmd = q.trim().toLowerCase();
         const filePath = path.join(pdfFolder, `${requestedCmd}.pdf`);
 
         if (!fs.existsSync(filePath)) {
-            return reply("❌ එවැනි නමකින් PDF එකක් සොයාගත නොහැක. කරුණාකර නම නිවැරදිදැයි පරීක්ෂා කරන්න.");
+            return reply("🔴 ᴀ ᴘᴅғ ᴡɪᴛʜ ᴛʜᴀᴛ ɴᴀᴍᴇ ᴄᴀɴɴᴏᴛ ʙᴇ ғᴏᴜɴᴅ. ᴘʟᴇᴀsᴇ ᴄʜᴇᴄᴋ ᴛʜᴀᴛ ᴛʜᴇ ɴᴀᴍᴇ ɪs ᴄᴏʀʀᴇᴄᴛ.\n\n> 𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝙱𝚢 𝘒 𝘊𝘦𝘠 | +𝟿𝟺𝟽𝟻𝟸𝟺𝟸𝟻𝟻𝟸𝟽");
         }
 
         // PDF එක පරිශීලකයා වෙත යැවීම
@@ -95,7 +111,7 @@ async (conn, mek, m, { from, reply, q }) => {
 
         // PDF එක යැවූ පසු පරිශීලකයාට ලැබෙන Thank you මැසේජ් එක
         await conn.sendMessage(from, { 
-            text: `✨ *Thank you for using Readers Heaven Bot!*\n\n𝘗𝘰𝘸𝘦𝘳𝘦𝘥 𝘣𝘺 𝘒 𝘊𝘦𝘠 | +𝟿𝟺𝟽𝟻𝟸𝟺𝟸𝟻𝟻𝟸𝟽` 
+            text: `✨ 𝑇ℎ𝑎𝑛𝑘 𝑦𝑜𝑢 𝑓𝑜𝑟 𝑢𝑠𝑖𝑛𝑔 𝑅𝑒𝑎𝑑𝑒𝑟𝑠 𝐻𝑒𝑎𝑣𝑒𝑛 𝐵𝑜𝑡!\n\n> 𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝙱𝚢 𝘒 𝘊𝘦𝘠 | +𝟿𝟺𝟽𝟻𝟸𝟺𝟸𝟻𝟻𝟸𝟽` 
         }, { quoted: m });
 
     } catch (e) {
