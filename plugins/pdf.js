@@ -1,74 +1,97 @@
+const { cmd } = require('../command');
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const path = require('path');
 
-// PDF සේව් වන ෆෝල්ඩරය
-const pdfFolder = './saved_pdfs';
+// PDF ෆයිල් සේව් වෙන්න ඕන ෆෝල්ඩරය (Bot root එකේ 'saved_pdfs' කියලා හැදෙයි)
+const pdfFolder = path.join(__dirname, '../saved_pdfs');
 if (!fs.existsSync(pdfFolder)) {
-    fs.mkdirSync(pdfFolder);
+    fs.mkdirSync(pdfFolder, { recursive: true });
 }
 
-// ප්‍රධාන Handler එක ඇතුලත හෝ අදාල Plugin එක තුල ලිවිය යුතු කොටස:
-async function handlePdfPlugin(conn, m, text, prefix, command) {
-    const adminNumber = '94752425527@s.whatsapp.net'; // ඔබේ WhatsApp ID එක
-    const sender = m.sender; // මැසේජ් එක එවූ කෙනාගේ ID එක
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  1. PDF එක Save කරගන්නා කොටස (Admin/Owner Only)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cmd({
+    pattern: "up",
+    desc: "Reply to a PDF and save it with a shortcut name",
+    category: "owner",
+    react: "📥",
+    filename: __filename
+},
+async (conn, mek, m, { from, isOwner, reply, q }) => {
+    try {
+        // Owner කෙනෙක් නොවේ නම් සිලන්ට් වෙනවා (ඔයාගේ tagall එකේ වගේමයි)
+        if (!isOwner) return;
 
-    // ----------------------------------------
-    // 1. PDF එක සේව් කරගන්නා කොටස (Admin Only)
-    // ----------------------------------------
-    if (command === 'up') {
-        // ඇඩ්මින් කෙනෙක්ද කියා පරීක්ෂා කිරීම
-        if (sender !== adminNumber) {
-            return m.reply("මෙම විධානය භාවිත කළ හැක්කේ Admin හට පමණි!");
+        // PDF එකට දෙන නම ඇතුලත් කර ඇත්දැයි බැලීම
+        if (!q) return reply("❌ කරුණාකර PDF එක සඳහා shortcut නමක් ලබා දෙන්න.\n*Ex:* .add science_paper");
+
+        const cmdName = q.trim().toLowerCase().replace(/\s+/g, '_'); // හිස්තැන් ඇත්නම් '_' දමයි
+        const quoted = m.quoted || null;
+        const quotedType = quoted ? quoted.type : null;
+
+        // Reply කර ඇති මැසේජ් එක PDF එකක්ද කියා පරික්ෂා කිරීම
+        const mime = quoted?.msg?.mimetype || '';
+        if (quotedType !== 'documentMessage' || !/pdf/.test(mime)) {
+            return reply("❌ කරුණාකර PDF Document එකකට Reply කර මෙම command එක ලබාදෙන්න.");
         }
 
-        // කමාන්ඩ් එකේ නම ලබා ගැනීම (Ex: .add science_paper)
-        const cmdName = text.trim().toLowerCase();
-        if (!cmdName) {
-            return m.reply(`කරුණාකර කමාන්ඩ් එකක් ඇතුලත් කරන්න.\n*Ex:* ${prefix}add science_paper`);
-        }
+        reply("⏳ PDF එක Bot තුලට Download වෙමින් පවතී, කරුණාකර රැඳී සිටින්න...");
 
-        // Reply කර ඇති මැසේජ් එක පරීක්ෂා කිරීම
-        const quoted = m.quoted ? m.quoted : m;
-        const mime = (quoted.msg || quoted).mimetype || '';
+        // ඔයාගේ tagall එකේ විදිහටම media එක download කරගන්නවා
+        const buffer = await downloadMediaMessage(
+            { message: quoted, key: { ...mek.key, id: quoted.id, participant: quoted.sender } },
+            'buffer',
+            {}
+        ).catch(() => null);
 
-        if (!/pdf/.test(mime)) {
-            return m.reply("කරුණාකර PDF එකකට Reply කර මෙම Command එක ලබාදෙන්න.");
-        }
+        if (!buffer) return reply("❌ PDF එක Download කිරීමට නොහැකි විය. නැවත උත්සාහ කරන්න.");
 
-        try {
-            m.reply("PDF එක Download වෙමින් පවතී, කරුණාකර රැඳී සිටින්න...");
-            
-            // Framework එක අනුව download කරන ආකාරය වෙනස් විය හැක. 
-            // සාමාන්‍ය Baileys Framework වල:
-            const buffer = await m.quoted.download(); 
-            
-            const filePath = path.join(pdfFolder, `${cmdName}.pdf`);
-            fs.writeFileSync(filePath, buffer);
+        // ෆයිල් එක සේව් කිරීම
+        const filePath = path.join(pdfFolder, `${cmdName}.pdf`);
+        fs.writeFileSync(filePath, buffer);
 
-            m.reply(`✅ සාර්ථකයි!\nPDF එක *${cmdName}* නමින් සේව් කරගත්තා.\nදැන් ඕනෑම අයෙකුට *${prefix}${cmdName}* ලෙස ලබා දී මෙය ලබාගත හැක.`);
-        } catch (error) {
-            console.error(error);
-            m.reply("PDF එක සේව් කිරීමට යාමේදී දෝෂයක් ඇතිවිය.");
-        }
+        reply(`✅ *සාර්ථකව සේව් කරගත්තා!*\n\nදැන් ඕනෑම අයෙකුට \`.pdf ${cmdName}\` ලෙස බාවිතා කර මෙම PDF එක ලබාගත හැක.`);
+
+    } catch (e) {
+        console.log('[PDF ADD ERROR]', e.message);
+        reply(`❌ Error: ${e.message}`);
     }
+});
 
-    // ----------------------------------------
-    // 2. වෙනත් ඕනෑම අයෙකුට PDF එක ලබාදෙන කොටස
-    // ----------------------------------------
-    const requestedCmd = command.toLowerCase();
-    const checkPath = path.join(pdfFolder, `${requestedCmd}.pdf`);
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  2. ඕනෑම පරිශීලකයෙකුට PDF එක ලබාදෙන කොටස (Public)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cmd({
+    pattern: "pdf",
+    alias: ["getpdf", "document"],
+    desc: "Get a saved PDF by its shortcut name",
+    category: "download",
+    react: "📄",
+    filename: __filename
+},
+async (conn, mek, m, { from, reply, q }) => {
+    try {
+        if (!q) return reply("❌ කරුණාකර ලබාගත යුතු PDF එකේ නම ඇතුලත් කරන්න.\n*Ex:* .pdf science_paper");
 
-    if (fs.existsSync(checkPath)) {
-        try {
-            // PDF එක සාර්ථකව පරිශීලකයා වෙත යැවීම
-            await conn.sendMessage(m.chat, {
-                document: fs.readFileSync(checkPath),
-                mimetype: 'application/pdf',
-                fileName: `${requestedCmd}.pdf`
-            }, { quoted: m });
-        } catch (err) {
-            console.error(err);
-            m.reply("PDF එක එවීමට යාමේදී දೋෂයක් ඇතිවිය.");
+        const requestedCmd = q.trim().toLowerCase();
+        const filePath = path.join(pdfFolder, `${requestedCmd}.pdf`);
+
+        // එහෙම ෆයිල් එකක් තියෙනවද බලනවා
+        if (!fs.existsSync(filePath)) {
+            return reply("❌ එවැනි නමකින් PDF එකක් සොයාගත නොහැක. කරුණාකර නම නිවැරදිදැයි පරීක්ෂා කරන්න.");
         }
+
+        // PDF එක පරිශීලකයා වෙත යැවීම
+        await conn.sendMessage(from, {
+            document: fs.readFileSync(filePath),
+            mimetype: 'application/pdf',
+            fileName: `${requestedCmd}.pdf`
+        }, { quoted: m });
+
+    } catch (e) {
+        console.log('[PDF GET ERROR]', e.message);
+        reply(`❌ Error: ${e.message}`);
     }
-}
+});
