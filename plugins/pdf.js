@@ -15,7 +15,7 @@ async function handlePdfPlugin(conn, m, text, prefix, command) {
     // ----------------------------------------
     // 1. PDF එක සේව් කරගන්නා කොටස (Admin Only)
     // ----------------------------------------
-    if (command === 'add') {
+    if (command === 'up') {
         // ඇඩ්මින් කෙනෙක්ද කියා පරීක්ෂා කිරීම
         if (sender !== adminNumber) {
             return m.reply("මෙම විධානය භාවිත කළ හැක්කේ Admin හට පමණි!");
