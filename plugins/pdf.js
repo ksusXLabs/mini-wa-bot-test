@@ -52,7 +52,7 @@ async (conn, mek, m, { from, reply, q }) => {
             return reply("❌ ᴘʟᴇᴀsᴇ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴘᴅғ ᴅᴏᴄᴜᴍᴇɴᴛ ᴀɴᴅ ᴘʀᴏᴠɪᴅᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.");
         }
 
-        reply("⏳ ᴛʜᴇ ᴘᴅғ ɪs ʙᴇɪɴ章 ᴜᴘʟᴏᴀᴅᴇᴅ ᴛᴏ ᴛʜᴇ ᴅᴀᴛᴀʙᴀsᴇ, ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ...\n\n> 𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝙱𝚢 𝘒 𝘊𝘦𝘠 | +𝟿𝟺𝟽𝟻𝟸𝟺𝟸𝟻𝟻𝟸𝟽");
+        reply("⏳ ᴛʜᴇ ᴘᴅғ ɪs ʙᴇɪɴɢ ᴜᴘʟᴏᴀᴅᴇᴅ ᴛᴏ ᴛʜᴇ ᴅᴀᴛᴀʙᴀsᴇ, ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ...\n\n> 𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝙱𝚢 𝘒 𝘊𝘦𝘠 | +𝟿𝟺𝟽𝟻𝟸𝟺𝟸𝟻𝟻𝟸𝟽");
 
         const buffer = await downloadMediaMessage(
             { message: quoted, key: { ...mek.key, id: quoted.id, participant: quoted.sender } },
@@ -67,8 +67,8 @@ async (conn, mek, m, { from, reply, q }) => {
 
         reply(
 `✅ 𝐏𝐃𝐅 𝐬𝐚𝐯𝐞𝐝 𝐬𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲!\n\n
-📂 ᴄᴍᴅ ɴᴀᴍᴇ: *${cmdName}*\n\n
-💡 ɴᴏᴡ ᴀɴʏᴏɴᴇ ᴄᴀɴ ᴀᴄᴄᴇꜱꜱ ᴛʜɪꜱ ᴘᴅꜰ ᴜꜱɪɴ章 *¡ᴘᴅꜰ ${cmdName}*.\n\n
+📂 ᴄᴍᴅ ɴᴀᴍᴇ: *${cmdName}*\n
+💡 ɴᴏᴡ ᴀɴʏᴏɴᴇ ᴄᴀɴ ᴀᴄᴄᴇꜱꜱ ᴛʜɪꜱ ᴘᴅꜰ ᴜꜱɪɴɢ *¡ᴘᴅꜰ ${cmdName}*.\n\n
 > 𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝙱𝚢 𝘒 𝘊𝘦𝘠 | +𝟿𝟺𝟽𝟻𝟸𝟺𝟸𝟻𝟻𝟸𝟽`
         );
 
@@ -111,7 +111,7 @@ async (conn, mek, m, { from, reply, q }) => {
 
         // PDF එක යැවූ පසු පරිශීලකයාට ලැබෙන Thank you මැසේජ් එක
         await conn.sendMessage(from, { 
-            text: `✨ 𝑇ℎ𝑎𝑛𝑘 𝑦𝑜𝑢 𝑓𝑜𝑟 𝑢𝑠𝑖𝑛𝑔 𝑅𝑒𝑎𝑑𝑒𝑟𝑠 𝐻𝑒𝑎𝑣𝑒𝑛 𝐵𝑜𝑡!\n\n> 𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝙱𝚢 𝘒 𝘊𝘦𝘠 | +𝟿𝟺𝟽𝟻𝟸𝟺𝟸𝟻𝟻𝟸𝟽` 
+            text: `✨ 𝑇ℎ𝑎𝑛𝑘 𝑦𝑜𝑢 𝑓𝑜𝑟 𝑢𝑠𝑖𝑛𝑔 𝑂𝑢𝑟 𝐵𝑜𝑡!\n\n> 𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝙱𝚢 𝘒 𝘊𝘦𝘠 | +𝟿𝟺𝟽𝟻𝟸𝟺𝟸𝟻𝟻𝟸𝟽` 
         }, { quoted: m });
 
     } catch (e) {
