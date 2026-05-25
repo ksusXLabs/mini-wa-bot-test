@@ -3,7 +3,7 @@ const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const path = require('path');
 
-// PDF ෆයිල් සේව් වෙන්න ඕන ෆෝල්ඩරය (Bot root එකේ 'saved_pdfs' කියලා හැදෙයි)
+// PDF ෆයිල් සේව් වෙන්න ඕන ෆෝල්ඩරය
 const pdfFolder = path.join(__dirname, '../saved_pdfs');
 if (!fs.existsSync(pdfFolder)) {
     fs.mkdirSync(pdfFolder, { recursive: true });
@@ -21,25 +21,23 @@ cmd({
 },
 async (conn, mek, m, { from, isOwner, reply, q }) => {
     try {
-        // Owner කෙනෙක් නොවේ නම් සිලන්ට් වෙනවා (ඔයාගේ tagall එකේ වගේමයි)
         if (!isOwner) return;
 
-        // PDF එකට දෙන නම ඇතුලත් කර ඇත්දැයි බැලීම
-        if (!q) return reply("❌ කරුණාකර PDF එක සඳහා shortcut නමක් ලබා දෙන්න.\n*Ex:* .add science_paper");
+        if (!q) {
+            return reply("❌ කරුණාකර PDF එක සඳහා shortcut නමක් ලබා දෙන්න.\n💡 *Ex:* !up science_paper");
+        }
 
-        const cmdName = q.trim().toLowerCase().replace(/\s+/g, '_'); // හිස්තැන් ඇත්නම් '_' දමයි
+        const cmdName = q.trim().toLowerCase().replace(/\s+/g, '_'); 
         const quoted = m.quoted || null;
         const quotedType = quoted ? quoted.type : null;
 
-        // Reply කර ඇති මැසේජ් එක PDF එකක්ද කියා පරික්ෂා කිරීම
         const mime = quoted?.msg?.mimetype || '';
         if (quotedType !== 'documentMessage' || !/pdf/.test(mime)) {
             return reply("❌ කරුණාකර PDF Document එකකට Reply කර මෙම command එක ලබාදෙන්න.");
         }
 
-        reply("⏳ PDF එක Bot තුලට Download වෙමින් පවතී, කරුණාකර රැඳී සිටින්න...");
+        reply("⏳ PDF එක Readers Heaven වෙත Download වෙමින් පවතී, කරුණාකර රැඳී සිටින්න...");
 
-        // ඔයාගේ tagall එකේ විදිහටම media එක download කරගන්නවා
         const buffer = await downloadMediaMessage(
             { message: quoted, key: { ...mek.key, id: quoted.id, participant: quoted.sender } },
             'buffer',
@@ -48,11 +46,15 @@ async (conn, mek, m, { from, isOwner, reply, q }) => {
 
         if (!buffer) return reply("❌ PDF එක Download කිරීමට නොහැකි විය. නැවත උත්සාහ කරන්න.");
 
-        // ෆයිල් එක සේව් කිරීම
         const filePath = path.join(pdfFolder, `${cmdName}.pdf`);
         fs.writeFileSync(filePath, buffer);
 
-        reply(`✅ *සාර්ථකව සේව් කරගත්තා!*\n\nදැන් ඕනෑම අයෙකුට \`.pdf ${cmdName}\` ලෙස බාවිතා කර මෙම PDF එක ලබාගත හැක.`);
+        reply(
+`✅ *PDF එක සාර්ථකව සේව් කරගත්තා!*\n
+📂 *Name:* ${cmdName}\n
+💡 දැන් ඕනෑම අයෙකුට *!pdf ${cmdName}* ලෙස භාවිත කර මෙම PDF එක ලබාගත හැක.\n
+𝘗𝘰𝘸𝘦𝘳𝘦𝘥 𝘣𝘺 𝘒 𝘊𝘦𝘠 | +𝟿𝟺𝟽𝟻𝟸𝟺𝟸𝟻𝟻𝟸𝟽`
+        );
 
     } catch (e) {
         console.log('[PDF ADD ERROR]', e.message);
@@ -73,12 +75,13 @@ cmd({
 },
 async (conn, mek, m, { from, reply, q }) => {
     try {
-        if (!q) return reply("❌ කරුණාකර ලබාගත යුතු PDF එකේ නම ඇතුලත් කරන්න.\n*Ex:* .pdf science_paper");
+        if (!q) {
+            return reply("❌ කරුණාකර ලබාගත යුතු PDF එකේ නම ඇතුලත් කරන්න.\n💡 *Ex:* !pdf science_paper");
+        }
 
         const requestedCmd = q.trim().toLowerCase();
         const filePath = path.join(pdfFolder, `${requestedCmd}.pdf`);
 
-        // එහෙම ෆයිල් එකක් තියෙනවද බලනවා
         if (!fs.existsSync(filePath)) {
             return reply("❌ එවැනි නමකින් PDF එකක් සොයාගත නොහැක. කරුණාකර නම නිවැරදිදැයි පරීක්ෂා කරන්න.");
         }
@@ -88,6 +91,11 @@ async (conn, mek, m, { from, reply, q }) => {
             document: fs.readFileSync(filePath),
             mimetype: 'application/pdf',
             fileName: `${requestedCmd}.pdf`
+        }, { quoted: m });
+
+        // PDF එක යැවූ පසු පරිශීලකයාට ලැබෙන Thank you මැසේජ් එක
+        await conn.sendMessage(from, { 
+            text: `✨ *Thank you for using Readers Heaven Bot!*\n\n𝘗𝘰𝘸𝘦𝘳𝘦𝘥 𝘣𝘺 𝘒 𝘊𝘦𝘠 | +𝟿𝟺𝟽𝟻𝟸𝟺𝟸𝟻𝟻𝟸𝟽` 
         }, { quoted: m });
 
     } catch (e) {
