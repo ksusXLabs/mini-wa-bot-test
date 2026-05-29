@@ -1,53 +1,87 @@
-
-const axios = require('axios');
-const config = require('../config');
-const { cmd, commands } = require('../command');
-
-const fs = require("fs");
+const { cmd } = require('../command');
 
 cmd({
     pattern: "vv",
     react: "🖕",
     alias: ["retrive", "viewonce"],
-    desc: "Fetch and resend a ViewOnce message content (image/video/voice).",
+    desc: "Fetch and resend a ViewOnce message content",
     category: "misc",
-    use: "",
     filename: __filename
-}, async (conn, mek, m, { from, reply }) => {
+},
+async (conn, mek, m, {
+    from,
+    reply
+}) => {
     try {
-        if (!m.quoted) return reply("Please reply to a ViewOnce message.");
 
-        const mime = m.quoted.type;
-        let ext, mediaType;
-        
-        if (mime === "imageMessage") {
-            ext = "jpg";
-            mediaType = "image";
-        } else if (mime === "videoMessage") {
-            ext = "mp4";
-            mediaType = "video";
-        } else if (mime === "audioMessage") {
-            ext = "mp3";
-            mediaType = "audio";
-        } else {
-            return reply("Unsupported media type. Please reply to an image, video, or audio message.");
+        // Reply check
+        if (!m.quoted) {
+            return reply("❌ ViewOnce message ekakata reply karanna.");
         }
 
-        var buffer = await m.quoted.download();
-        var filePath = `${Date.now()}.${ext}`;
+        let quoted = m.quoted;
+        let msg = quoted.message || quoted.msg || quoted;
 
-        fs.writeFileSync(filePath, buffer); 
+        // Handle ViewOnce wrapper
+        if (msg.viewOnceMessage) {
+            msg = msg.viewOnceMessage.message;
+        }
 
-        let mediaObj = {};
-        mediaObj[mediaType] = fs.readFileSync(filePath);
+        if (msg.viewOnceMessageV2) {
+            msg = msg.viewOnceMessageV2.message;
+        }
 
-        await conn.sendMessage(m.chat, mediaObj);
+        if (msg.viewOnceMessageV2Extension) {
+            msg = msg.viewOnceMessageV2Extension.message;
+        }
 
-        fs.unlinkSync(filePath);
+        // Detect media type
+        let type = Object.keys(msg)[0];
+
+        // IMAGE
+        if (type === "imageMessage") {
+            let buffer = await quoted.download();
+
+            await conn.sendMessage(from, {
+                image: buffer,
+                caption: msg.imageMessage.caption || "🌸 Retrieved ViewOnce Image"
+            }, {
+                quoted: mek
+            });
+        }
+
+        // VIDEO
+        else if (type === "videoMessage") {
+            let buffer = await quoted.download();
+
+            await conn.sendMessage(from, {
+                video: buffer,
+                caption: msg.videoMessage.caption || "🌸 Retrieved ViewOnce Video"
+            }, {
+                quoted: mek
+            });
+        }
+
+        // AUDIO / VOICE
+        else if (type === "audioMessage") {
+            let buffer = await quoted.download();
+
+            await conn.sendMessage(from, {
+                audio: buffer,
+                mimetype: "audio/mp4",
+                ptt: true
+            }, {
+                quoted: mek
+            });
+        }
+
+        // Unsupported
+        else {
+            return reply("❌ Supported na. Image/Video/Voice ViewOnce ekak reply karanna.");
+        }
 
     } catch (e) {
-        console.log("Error:", e);
-        reply("An error occurred while fetching the ViewOnce message.", e);
+        console.log("[VV ERROR]", e);
+        reply(`❌ Error: ${e.message}`);
     }
 });
-        
