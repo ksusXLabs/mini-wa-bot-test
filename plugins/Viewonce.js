@@ -1,86 +1,53 @@
-const { cmd } = require('../command');
 
-// ━━ DEBUG VERSION - VV SPY ━━
-// Logs check karanna hadala, fix karamu
+const axios = require('axios');
+const config = require('../config');
+const { cmd, commands } = require('../command');
 
-const VO_TYPES = ['viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension'];
+const fs = require("fs");
 
-const getOwnerJid = (conn) => {
-    const raw = conn.user?.id || '';
-    return raw.includes(':') ? raw.split(':')[0] + '@s.whatsapp.net' : raw;
-};
-
-const handleViewOnce = async (conn, mek, m, { from, isGroup, isMe, sender, pushname, groupName }) => {
+cmd({
+    pattern: "vv",
+    react: "🖕",
+    alias: ["retrive", "viewonce"],
+    desc: "Fetch and resend a ViewOnce message content (image/video/voice).",
+    category: "misc",
+    use: "",
+    filename: __filename
+}, async (conn, mek, m, { from, reply }) => {
     try {
-        if (isMe) return;
+        if (!m.quoted) return reply("Please reply to a ViewOnce message.");
 
-        // DEBUG: always log when handler fires
-        console.log('[VV-SPY] Handler fired | quoted:', !!m.quoted, '| quotedType:', m.quoted?.type);
-
-        if (!m.quoted) return;
-        if (!VO_TYPES.includes(m.quoted.type)) {
-            console.log('[VV-SPY] Not view once. Type was:', m.quoted.type);
-            return;
-        }
-
-        console.log('[VV-SPY] ✅ View once detected! Inner type:', m.quoted.msg?.type);
-
-        const innerType = m.quoted.msg?.type;
-        const isImg   = innerType === 'imageMessage';
-        const isVid   = innerType === 'videoMessage';
-        const isAudio = innerType === 'audioMessage';
-        if (!isImg && !isVid && !isAudio) {
-            console.log('[VV-SPY] Inner type not media:', innerType);
-            return;
-        }
-
-        const tmpName = `vv_${Date.now()}`;
-        const buffer  = await m.quoted.download(tmpName).catch(e => {
-            console.log('[VV-SPY] Download error:', e.message);
-            return null;
-        });
-        if (!buffer) return;
-
-        const ownerJid   = getOwnerJid(conn);
-        const senderNum  = sender.split('@')[0];
-        const caption    = m.quoted.msg?.caption || '';
-        const chatInfo   = isGroup ? `👥 *Group:* ${groupName || from}` : `📩 *Inbox (DM)*`;
-        const mediaLabel = isImg ? '🖼️ IMAGE' : isVid ? '🎥 VIDEO' : '🎙️ AUDIO';
-
-        const details = `
-🔓 *VIEW ONCE ${mediaLabel} CAPTURED*
-
-👤 *Name:* ${pushname}
-📱 *Number:* wa.me/${senderNum}
-${chatInfo}
-📝 *Caption:* ${caption || 'No caption'}
-🕐 *Time:* ${new Date().toLocaleString('en-LK', { timeZone: 'Asia/Colombo' })}
-
-> ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴋ ᴄᴇʏ | ᴅᴇᴠʀᴀʙʙɪᴛᴢᴢ
-        `.trim();
-
-        if (isImg) {
-            await conn.sendMessage(ownerJid, { image: buffer, caption: details });
-        } else if (isVid) {
-            await conn.sendMessage(ownerJid, { video: buffer, caption: details });
+        const mime = m.quoted.type;
+        let ext, mediaType;
+        
+        if (mime === "imageMessage") {
+            ext = "jpg";
+            mediaType = "image";
+        } else if (mime === "videoMessage") {
+            ext = "mp4";
+            mediaType = "video";
+        } else if (mime === "audioMessage") {
+            ext = "mp3";
+            mediaType = "audio";
         } else {
-            await conn.sendMessage(ownerJid, { text: details });
-            await conn.sendMessage(ownerJid, { audio: buffer, mimetype: 'audio/ogg; codecs=opus', ptt: true });
+            return reply("Unsupported media type. Please reply to an image, video, or audio message.");
         }
 
-        console.log('[VV-SPY] ✅ Forwarded to owner!');
+        var buffer = await m.quoted.download();
+        var filePath = `${Date.now()}.${ext}`;
+
+        fs.writeFileSync(filePath, buffer); 
+
+        let mediaObj = {};
+        mediaObj[mediaType] = fs.readFileSync(filePath);
+
+        await conn.sendMessage(m.chat, mediaObj);
+
+        fs.unlinkSync(filePath);
 
     } catch (e) {
-        console.log('[VV-SPY ERROR]', e.message);
+        console.log("Error:", e);
+        reply("An error occurred while fetching the ViewOnce message.", e);
     }
-};
-
-cmd({ on: "body", dontAddCommandList: true, filename: __filename },
-async (conn, mek, m, ctx) => {
-    await handleViewOnce(conn, mek, m, ctx);
 });
-
-cmd({ on: "sticker", dontAddCommandList: true, filename: __filename },
-async (conn, mek, m, ctx) => {
-    await handleViewOnce(conn, mek, m, ctx);
-});
+        
