@@ -15,29 +15,16 @@ async (conn, mek, m, {
     try {
 
         if (!m.quoted) {
-            return reply("❌ ViewOnce ekakata reply karanna.");
+            return reply("❌ ViewOnce message ekakata reply karanna.");
         }
 
-        let quoted = m.quoted;
+        const quoted = m.quoted;
 
-        // Raw message eka ganna
-        let message = quoted.message || quoted.msg || {};
+        // REAL media type
+        const mediaType = quoted.msg?.type || quoted.type;
 
-        // ViewOnce unwrap
-        let voMessage =
-            message?.viewOnceMessage?.message ||
-            message?.viewOnceMessageV2?.message ||
-            message?.viewOnceMessageV2Extension?.message;
-
-        if (!voMessage) {
-            return reply("❌ Meeka ViewOnce message ekak neme.");
-        }
-
-        // media type detect
-        let mediaType = Object.keys(voMessage)[0];
-
-        // download media
-        let buffer = await quoted.download();
+        // Download media
+        const buffer = await quoted.download().catch(() => null);
 
         if (!buffer) {
             return reply("❌ Media download failed.");
@@ -45,10 +32,9 @@ async (conn, mek, m, {
 
         // IMAGE
         if (mediaType === "imageMessage") {
-
             return await conn.sendMessage(from, {
                 image: buffer,
-                caption: voMessage.imageMessage.caption || ""
+                caption: quoted.msg?.caption || ""
             }, {
                 quoted: mek
             });
@@ -56,10 +42,9 @@ async (conn, mek, m, {
 
         // VIDEO
         if (mediaType === "videoMessage") {
-
             return await conn.sendMessage(from, {
                 video: buffer,
-                caption: voMessage.videoMessage.caption || ""
+                caption: quoted.msg?.caption || ""
             }, {
                 quoted: mek
             });
@@ -67,17 +52,16 @@ async (conn, mek, m, {
 
         // AUDIO / VOICE
         if (mediaType === "audioMessage") {
-
             return await conn.sendMessage(from, {
                 audio: buffer,
                 mimetype: "audio/mp4",
-                ptt: voMessage.audioMessage.ptt || false
+                ptt: quoted.msg?.ptt || false
             }, {
                 quoted: mek
             });
         }
 
-        return reply("❌ Supported na. Image/Video/Voice ViewOnce ekak try karanna.");
+        return reply(`❌ Unsupported type: ${mediaType}`);
 
     } catch (e) {
         console.log("[VV ERROR]", e);
