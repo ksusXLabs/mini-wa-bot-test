@@ -4,7 +4,7 @@ cmd({
     pattern: "vv",
     react: "🖕",
     alias: ["retrive", "viewonce"],
-    desc: "Fetch and resend a ViewOnce message content",
+    desc: "Retrieve ViewOnce media",
     category: "misc",
     filename: __filename
 },
@@ -14,71 +14,70 @@ async (conn, mek, m, {
 }) => {
     try {
 
-        // Reply check
         if (!m.quoted) {
-            return reply("❌ ViewOnce message ekakata reply karanna.");
+            return reply("❌ ViewOnce ekakata reply karanna.");
         }
 
         let quoted = m.quoted;
-        let msg = quoted.message || quoted.msg || quoted;
 
-        // Handle ViewOnce wrapper
-        if (msg.viewOnceMessage) {
-            msg = msg.viewOnceMessage.message;
+        // Raw message eka ganna
+        let message = quoted.message || quoted.msg || {};
+
+        // ViewOnce unwrap
+        let voMessage =
+            message?.viewOnceMessage?.message ||
+            message?.viewOnceMessageV2?.message ||
+            message?.viewOnceMessageV2Extension?.message;
+
+        if (!voMessage) {
+            return reply("❌ Meeka ViewOnce message ekak neme.");
         }
 
-        if (msg.viewOnceMessageV2) {
-            msg = msg.viewOnceMessageV2.message;
-        }
+        // media type detect
+        let mediaType = Object.keys(voMessage)[0];
 
-        if (msg.viewOnceMessageV2Extension) {
-            msg = msg.viewOnceMessageV2Extension.message;
-        }
+        // download media
+        let buffer = await quoted.download();
 
-        // Detect media type
-        let type = Object.keys(msg)[0];
+        if (!buffer) {
+            return reply("❌ Media download failed.");
+        }
 
         // IMAGE
-        if (type === "imageMessage") {
-            let buffer = await quoted.download();
+        if (mediaType === "imageMessage") {
 
-            await conn.sendMessage(from, {
+            return await conn.sendMessage(from, {
                 image: buffer,
-                caption: msg.imageMessage.caption || "🌸 Retrieved ViewOnce Image"
+                caption: voMessage.imageMessage.caption || ""
             }, {
                 quoted: mek
             });
         }
 
         // VIDEO
-        else if (type === "videoMessage") {
-            let buffer = await quoted.download();
+        if (mediaType === "videoMessage") {
 
-            await conn.sendMessage(from, {
+            return await conn.sendMessage(from, {
                 video: buffer,
-                caption: msg.videoMessage.caption || "🌸 Retrieved ViewOnce Video"
+                caption: voMessage.videoMessage.caption || ""
             }, {
                 quoted: mek
             });
         }
 
         // AUDIO / VOICE
-        else if (type === "audioMessage") {
-            let buffer = await quoted.download();
+        if (mediaType === "audioMessage") {
 
-            await conn.sendMessage(from, {
+            return await conn.sendMessage(from, {
                 audio: buffer,
                 mimetype: "audio/mp4",
-                ptt: true
+                ptt: voMessage.audioMessage.ptt || false
             }, {
                 quoted: mek
             });
         }
 
-        // Unsupported
-        else {
-            return reply("❌ Supported na. Image/Video/Voice ViewOnce ekak reply karanna.");
-        }
+        return reply("❌ Supported na. Image/Video/Voice ViewOnce ekak try karanna.");
 
     } catch (e) {
         console.log("[VV ERROR]", e);
